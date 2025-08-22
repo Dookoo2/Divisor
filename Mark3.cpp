@@ -1,8 +1,3 @@
-// Mark3_updated.cpp  — дет-перебор “делителей” с батч-инверсией,
-// + SIMD-bloom + DP-таблица + live-статистика
-// + SHRINK-механизм: если решения нет за 10 минут,
-//   secret ← secret − ⌊secret/20⌋; диапазон [1, secret].
-
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -23,7 +18,6 @@
 #include "IntGroup.h"
 #include "simd_block_bloom.h"
 
-//──────────────────── format helpers ───────────────────
 static std::string humanBytes(size_t bytes){
     static const char* u[]={"B","KB","MB","GB","TB"};
     double v=double(bytes); int k=0;
@@ -43,7 +37,6 @@ static std::string formatRate(double cps){
     return o.str();
 }
 
-//──────────────────── SECP256K1 consts ───────────────────
 static const char *N_HEX =
  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141";
 static const char *P_HEX =
@@ -53,7 +46,6 @@ static inline Int hexToInt(const char *h){
 }
 static Int ORDER_N, FIELD_P;
 
-//──────────────────── Scalar256 (для DP) ───────────────────
 struct Scalar256{ uint64_t w[4]; };
 static inline void intToScalar(const Int&src,Scalar256&dst){
     dst.w[0]=src.bits64[0]; dst.w[1]=src.bits64[1];
@@ -67,7 +59,6 @@ static inline bool sameScalar(const Scalar256&a,const Scalar256&b){
     return std::memcmp(&a,&b,sizeof(a))==0;
 }
 
-//──────────────────── misc utils ───────────────────
 static inline uint64_t splitmix64(uint64_t x){
     x+=0x9E3779B97F4A7C15ULL;
     x=(x^(x>>30))*0xBF58476D1CE4E5B9ULL;
@@ -83,7 +74,6 @@ static std::string toHex(const Int&v,bool pad=false){
     return s;
 }
 
-//──────────────────── global objects ───────────────────
 static Secp256K1 secp;
 using fp_t = uint64_t;
 static std::vector<fp_t>      fp_tbl;
@@ -92,7 +82,6 @@ static std::unique_ptr<std::atomic<uint8_t>[]> used_tbl;
 static uint32_t dp_cap = 0;
 static simd_bloom::SimdBlockFilterFixed<> *bloom = nullptr;
 
-//──────────────────── Bloom + DP ───────────────────
 static inline fp_t make_fp(const Point&P){
     return splitmix64(IntLow64(P.x)^uint64_t(!P.y.IsEven()));
 }
@@ -123,7 +112,6 @@ static bool dp_find(fp_t fp,Int&out){
     return false;
 }
 
-//──────────────────── CLI args ───────────────────
 struct Args{ std::string keyHex,rangeStr; uint64_t q=0; std::string order="forward"; } args;
 static void usage(const char*p){
     std::cerr<<"Usage: "<<p<<" -k <pubkey_hex> -r <start_hex>:<end_hex>"
@@ -152,20 +140,17 @@ static bool parseArgs(int ac,char**av){
     return true;
 }
 
-//──────────────────── randomInRange ───────────────────
 static Int randomInRange(const Int&start,const Int&range,std::mt19937_64&rng){
     Int r; for(int i=0;i<4;++i) r.bits64[i]=rng();
     r.Mod(const_cast<Int*>(&range));
     Int t(start); r.Add(&t); return r;
 }
 
-//──────────────────── SHRINK helpers ───────────────────
 static std::mutex shrink_mtx;
 static int        shrinkCount = 0;
 static Int        offset;
 static std::atomic<bool> time_up(false);
 
-// Новый mutex и текущий счётчик делителей
 static std::mutex cur_mtx;
 static Int        global_cur;
 
@@ -188,7 +173,6 @@ static Int computeShrinkStep(const Int&curRange){
     return step;
 }
 
-//──────────────────────── MAIN ─────────────────────────
 int main(int argc,char**argv){
     if(!parseArgs(argc,argv)) return 1;
 
@@ -197,7 +181,6 @@ int main(int argc,char**argv){
     secp.Init();
     offset.SetInt32(0);
 
-    //── public key P
     Point P;
     if(args.keyHex.size()==66&&(args.keyHex[1]=='2'||args.keyHex[1]=='3')){
         bool even = (args.keyHex[1]=='2');
@@ -210,7 +193,6 @@ int main(int argc,char**argv){
         P.x=x; P.y=y; P.z.SetInt32(1);
     } else { std::cerr<<"Bad key\n"; return 1; }
 
-    //── начальный диапазон
     Int tmpStart, tmpEnd;
     if(!parseRange(args.rangeStr, tmpStart, tmpEnd)){ std::cerr<<"Bad range\n"; return 1; }
     Int one; one.SetInt32(1);
@@ -218,7 +200,6 @@ int main(int argc,char**argv){
     Int end   = tmpEnd;
     Int curRange = end;
 
-    //── Phase-0: allocate DP/Bloom
     if(args.q==0) args.q=1;
     const uint64_t traps=args.q;
     const double LOAD=0.75, BLOOM_F=2.0;
@@ -240,7 +221,6 @@ int main(int argc,char**argv){
              <<"Bloom    : "<<humanBytes(bloomBytes)<<"\n"
              <<"Total    : "<<humanBytes(dpBytes+bloomBytes)<<"\n\n";
 
-    //── fill DP/Bloom
     Int mul; mul.SetInt32(1);
     for(uint64_t m=1; m<=traps; ++m){
         Point Q = secp.ComputePublicKey(&mul);
@@ -250,10 +230,8 @@ int main(int argc,char**argv){
         mul.Add(&one);
     }
 
-    //── warm-up fixed-base
     { Int d; d.SetInt32(1); secp.ComputeFixedPointMul(&d,P); }
 
-    //── live-monitor
     std::atomic<bool> found(false);
     std::atomic<long long> globalChecks(0);
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -278,12 +256,9 @@ int main(int argc,char**argv){
              <<"Shrink   : 0\n"
              <<"Offset   : 0x0\n";
 
-    //── result vars
     Int foundDiv, foundMul, privKey;
 
-    //──────────────── outer SHRINK loop ────────────────
     while(curRange.IsGreater(&one) && !found.load()){
-        // сбросить счётчик текущего делителя на 1
         {
             std::lock_guard<std::mutex> lk(cur_mtx);
             global_cur.SetInt32(1);
@@ -293,7 +268,6 @@ int main(int argc,char**argv){
         auto deadline  = iterStart + std::chrono::seconds(60);
         time_up.store(false);
 
-        //──────── main search (OMP) ────────
         #pragma omp parallel
         {
             constexpr int BATCH = 256;
@@ -301,24 +275,20 @@ int main(int argc,char**argv){
             IntGroup grp(BATCH); grp.Set(buf.data());
 
             while(!found.load() && !time_up.load()){
-                // зарезервировать следующий батч [batch_start … batch_end]
                 Int batch_start, batch_end;
                 {
                     std::lock_guard<std::mutex> lk(cur_mtx);
                     if(global_cur.IsGreater(&curRange)) break;
                     batch_start = global_cur;
                     batch_end   = global_cur;
-                    // вычисляем batch_end = min(global_cur + (BATCH-1), curRange)
                     for(int i=1; i<BATCH; ++i){
                         Int tmp = batch_end; tmp.ModAdd(&tmp, &one);
                         if(tmp.IsGreater(&curRange)) break;
                         batch_end = tmp;
                     }
-                    // сдвинуть global_cur сразу за batch_end
                     global_cur = batch_end; global_cur.ModAdd(&global_cur, &one);
                 }
 
-                // заполнить orig/ buf последовательными значениями
                 int cnt = 0;
                 Int cur = batch_start;
                 while(cnt < BATCH && !cur.IsGreater(&batch_end)){
@@ -327,13 +297,11 @@ int main(int argc,char**argv){
                     ++cnt;
                     cur.ModAdd(&cur, &one);
                 }
-                // если недобрали до BATCH, дублируем последний
                 for(int i=cnt; i<BATCH; ++i){
                     orig[i] = orig[cnt-1];
                     buf[i]  = buf[cnt-1];
                 }
 
-                // проверка батча
                 grp.ModInvK1order();
                 for(int i=0; i<BATCH && !time_up.load(); ++i){
                     globalChecks.fetch_add(1);
@@ -361,36 +329,30 @@ int main(int argc,char**argv){
                 if(std::chrono::high_resolution_clock::now() >= deadline)
                     time_up.store(true);
             }
-        } // конец #pragma omp parallel
+        } 
 
         if(found.load()) break;
 
-        //──────── SHRINK ────────
         Int step = computeShrinkStep(curRange);
         {
             std::lock_guard<std::mutex> lk(shrink_mtx);
             ++shrinkCount;
             offset.Add(&step);
         }
-        // P = P − step·G
         Point deltaG = secp.ComputePublicKey(&step);
         pointSub(P, deltaG);
         P.Reduce();
 
-        // пересбор фиксированной базы
         secp.ClearFixedBase();
         { Int oneTmp; oneTmp.SetInt32(1); secp.ComputeFixedPointMul(&oneTmp, P); }
 
-        // уменьшить диапазон
         curRange.Sub(&step);
         end = curRange;
     }
 
-    //── завершение мониторинга
     found.store(true);
     monitor.join();
 
-    //── Phase-2
     std::cout<<"\n============== Phase-2: RESULT =============\n";
     if(found){
         Int finalPriv(privKey);
@@ -410,3 +372,4 @@ int main(int argc,char**argv){
     delete bloom;
     return 0;
 }
+
