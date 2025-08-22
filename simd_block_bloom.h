@@ -1,13 +1,5 @@
-// simd_block_filter_fixed.h        19-May-2025
-// -----------------------------------------------------------------------------
-// Высокопроизводительный split-block Bloom-фильтр (AVX2, 256-бит-bucket’ы)
-// Исправлено:
-//   • fastRange() вместо прежнего reduce() — всегда idx < bucket_count_.
-//   • load-OR-store для корректного обновления выровненной памяти.
-//   • счётчик ключей увеличивается на фактически добавленные.
-// -----------------------------------------------------------------------------
-#pragma once
 
+#pragma once
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -18,31 +10,28 @@
 #include <stdexcept>
 #include <vector>
 
-#include <x86intrin.h>            // AVX2 intrinsics
-#include "hashutil.h"             // hashing::SimpleMixSplit
+#include <x86intrin.h>        
+#include "hashutil.h"       
 
 namespace simd_bloom {
 
 using uint32 = std::uint32_t;
 using uint64 = std::uint64_t;
 
-//───────────────── helpers ───────────────────────────────────────────
 [[gnu::always_inline]] inline uint64 rotl64(uint64 x, int r) noexcept {
   return (x << r) | (x >> (64 - r));
 }
 [[gnu::always_inline]] inline uint32 fastRange(uint32 x, uint32 n) noexcept {
-  // Lemire-style high-word reduction, но вход ограничен 32-битным значением.
   return static_cast<uint32>((uint64_t(x) * n) >> 32);
 }
 
-//───────────────── SimdBlockFilterFixed ──────────────────────────────
 #ifdef __AVX2__
 
 template <typename HashFamily = ::hashing::SimpleMixSplit>
 class SimdBlockFilterFixed final {
-  using Bucket = uint32[8];                  // 256 бит
+  using Bucket = uint32[8];        
 
-  static constexpr int kBlockShift = 14;     // 16K u64 per временный блок
+  static constexpr int kBlockShift = 14;   
   static constexpr int kBlockLen   = 1 << kBlockShift;
 
   const uint32 bucket_count_;
@@ -50,7 +39,6 @@ class SimdBlockFilterFixed final {
   HashFamily hasher_;
   std::atomic<uint64> keys_{0};
 
-  // запрет копия/перемещения
   SimdBlockFilterFixed(const SimdBlockFilterFixed&)            = delete;
   SimdBlockFilterFixed& operator=(const SimdBlockFilterFixed&) = delete;
   SimdBlockFilterFixed(SimdBlockFilterFixed&&)                 = delete;
@@ -64,7 +52,7 @@ class SimdBlockFilterFixed final {
 
     __m256i x = _mm256_set1_epi32(h);
     x = _mm256_mullo_epi32(x, mul);
-    x = _mm256_srli_epi32(x, 27);            // 5 старших бит
+    x = _mm256_srli_epi32(x, 27);        
     return _mm256_sllv_epi32(ones, x);
   }
 
@@ -89,7 +77,6 @@ public:
   }
   [[nodiscard]] uint64 Keys() const noexcept { return keys_.load(); }
 
-  //───────────────── одиночная вставка ──────────────────────────────
   [[gnu::always_inline]] void Add(uint64 key) noexcept {
     const uint64 h   = hasher_(key);
     const uint32 idx = fastRange(static_cast<uint32>(rotl64(h, 32)), bucket_count_);
@@ -101,7 +88,6 @@ public:
     keys_.fetch_add(1, std::memory_order_relaxed);
   }
 
-  //───────────────── batch вставка ──────────────────────────────────
   void AddAll(const uint64* keys, size_t start, size_t end) {
     const size_t blocks = 1 + bucket_count_ / kBlockLen;
     std::vector<uint64> buf(blocks * kBlockLen);
@@ -129,7 +115,6 @@ public:
   }
   void AddAll(const std::vector<uint64>& v) { AddAll(v.data(), 0, v.size()); }
 
-  //───────────────── запрос ─────────────────────────────────────────
   [[gnu::always_inline]] bool Find(uint64 key) const noexcept {
     const uint64 h   = hasher_(key);
     const uint32 idx = fastRange(static_cast<uint32>(rotl64(h, 32)), bucket_count_);
@@ -153,5 +138,5 @@ private:
   }
 };
 
-#endif  // __AVX2__
-}  // namespace simd_bloom
+#endif
+} 
