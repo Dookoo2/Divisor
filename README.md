@@ -17,12 +17,9 @@ Like a joke, not for real work!
 - OpenMP support
 - x86_64 architecture with AVX2 support (for SIMD bloom filters)
 
-## Build
+## Samples
 
 ```bash
-g++ -O3 -march=native -fopenmp -std=c++17 -o keyrecover main.cpp
-
-
 Sample 1
 root@DESKTOP-BD9V01U:/mnt/e/Mark3# ./Mark3 -k 025e466e97ed0e7910d3d90ceb0332df48ddf67d456b9e7303b50a3d89de357336 -r 1:F02B35A358F -q 10000000 --order forward
 
