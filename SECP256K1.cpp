@@ -138,27 +138,22 @@ Point Secp256K1::Add(Point &p1, Point &p2) {
     Int vs3y1;
     Point r;
 
-    // Вычисляем промежуточные значения
     u1.ModMulK1(&p2.y, &p1.z);
     u2.ModMulK1(&p1.y, &p2.z);
     v1.ModMulK1(&p2.x, &p1.z);
     v2.ModMulK1(&p1.x, &p2.z);
 
-    // Проверка на точку на бесконечности
-    if (v1.IsEqual(&v2)) {  // Проверяем, равны ли X-координаты
-        if (!u1.IsEqual(&u2)) {  // Если Y-координаты разные
-            // Точка на бесконечности
+    if (v1.IsEqual(&v2)) {  
+        if (!u1.IsEqual(&u2)) {  
             r.x.SetInt32(0);
             r.y.SetInt32(0);
             r.z.SetInt32(0);
             return r;
         } else {
-            // Удвоение точки
-            return Double(p1);  // Метод для удвоения точки
+            return Double(p1);  
         }
     }
 
-    // Основные вычисления сложения точек
     u.ModSub(&u1, &u2);
     v.ModSub(&v1, &v2);
     w.ModMulK1(&p1.z, &p2.z);
@@ -343,60 +338,47 @@ bool Secp256K1::EC(Point &p) {
 
 void Secp256K1::ClearFixedBase()
 {
-    // Сброс «ленивого» кэша фиксированной базы
     PTableInited = false;
 }
 
 Point Secp256K1::ComputeFixedPointMul(const Int *privKey, const Point &P)
 {
-    /* ---------- 1. Ленивая генерация таблицы PTable ------------- */
     if (!PTableInited) {
-        Point N(P);                            // аналог N = G  в Init()
+        Point N(P);                      
         for (int i = 0; i < 32; ++i) {
-            /* i-е окно, первый элемент — N                         */
             PTable[i * 256] = N;
 
-            /* N = 2·N  (DoubleDirect всегда возвращает z = 1)      */
             N = DoubleDirect(N);
 
-            /* j = 1 … 254 : последовательно прибавляем "базу"      */
             for (int j = 1; j < 255; ++j) {
                 PTable[i * 256 + j] = N;
-                /* база окна = PTable[i*256] (z = 1)                 */
                 N = AddDirect(N, PTable[i * 256]);
             }
-            /* j = 255 — «заглушка» (как в оригинальной таблице)    */
             PTable[i * 256 + 255] = N;
         }
         PTableInited = true;
     }
-
-    /* ---------- 2. Схема умножения, копия ComputePublicKey ------- */
     int i = 0;
     uint8_t b;
     Point Q;
-    Q.Clear();                                  // точка на бесконечности
+    Q.Clear();                          
 
-    /* 2.1. Находим первый ненулевой байт (MSB → LSB)                */
     for (i = 0; i < 32; ++i) {
-        b = const_cast<Int*>(privKey)->GetByte(i);  // GetByte(0) — старший байт
+        b = const_cast<Int*>(privKey)->GetByte(i); 
         if (b) break;
     }
-    if (i == 32)               // k = 0  →  возвращаем O
+    if (i == 32)             
         return Q;
 
-    /* 2.2. Первое ненулевое "окно" — просто присвоить               */
     Q = PTable[256 * i + (b - 1)];
     ++i;
 
-    /* 2.3. Остальные окна — Add2, как в штатной функции             */
     for (; i < 32; ++i) {
         b = const_cast<Int*>(privKey)->GetByte(i);
         if (b)
             Q = Add2(Q, PTable[256 * i + (b - 1)]);
     }
 
-    /* ---------- 3. Одна Reduce и готово -------------------------- */
     Q.Reduce();
     return Q;
 }
