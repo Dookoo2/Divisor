@@ -49,17 +49,17 @@ public:
   Point Double(Point &p);
   Point DoubleDirect(Point &p);
 
-  Point G;                 // Generator
-  Int   order;             // Curve order
+  Point G;         
+  Int   order;        
 
 private:
 
   uint8_t GetByte(std::string &str,int idx);
 
   
-  Point GTable[256*32];       // Generator table
-  bool  PTableInited = false;        // ленивое построение таблицы
-  Point PTable[32 * 256];            // 8192 пред-вычисленных точек
+  Point GTable[256*32];     
+  bool  PTableInited = false;     
+  Point PTable[32 * 256];        
 
 };
 
