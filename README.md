@@ -1,3 +1,28 @@
+# Private Key Recovery Tool
+
+Funny high-performance C++ tool for recovering private keys from known public keys using a combination of distinguished points and parallel computation with divisors.
+Like a joke, not for real work!
+
+## Features
+
+- **Distinguished Points Algorithm**: Efficient key recovery using trap-based searching
+- **Multi-threaded**: Utilizes OpenMP for parallel computation
+- **Bloom Filter**: Optimized memory usage with SIMD-accelerated bloom filters
+- **Progress Monitoring**: Real-time statistics and progress reporting
+- **Flexible Search**: Supports both forward and random search patterns
+
+## Requirements
+
+- C++17 compatible compiler
+- OpenMP support
+- x86_64 architecture with AVX2 support (for SIMD bloom filters)
+
+## Build
+
+```bash
+g++ -O3 -march=native -fopenmp -std=c++17 -o keyrecover main.cpp
+
+
 Sample 1
 root@DESKTOP-BD9V01U:/mnt/e/Mark3# ./Mark3 -k 025e466e97ed0e7910d3d90ceb0332df48ddf67d456b9e7303b50a3d89de357336 -r 1:F02B35A358F -q 10000000 --order forward
 
@@ -40,5 +65,12 @@ Multiple : 0x00000000000000000000000000000000000000000000000000000000007aab31
 Offset   : 0x00000000000000000000000000000000000000000000000000016f39f5dfc971
 Private  : 0x00000000000000000000000000000000000000000000000000022bd43c2e9354
 Full time: 261.98 s
- 
+ ```
+
+## Getting Started
+```bash
  g++ -std=c++17 -Ofast -funroll-loops -ftree-vectorize -fstrict-aliasing -fno-semantic-interposition -fvect-cost-model=unlimited -fno-trapping-math -fipa-ra -fipa-modref -flto -fassociative-math -fopenmp -mavx2 -mbmi2 -madx Mark3.cpp Int.cpp SECP256K1.cpp Point.cpp Random.cpp IntMod.cpp IntGroup.cpp Timer.cpp -o Mark3
+ ```
+
+## TIPS
+BTC: bc1qtq4y9l9ajeyxq05ynq09z8p52xdmk4hqky9c8n
